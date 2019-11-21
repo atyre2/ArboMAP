@@ -4,6 +4,40 @@ library(dplyr)
 library(ggplot2)
 library(stringr)
 
+packages <- c("reshape2", "ggplot2", "gridExtra",
+              "lme4","pracma","dplyr","maptools",
+              "raster","spdep","mgcv","sp","rgdal",
+              "GISTools","data.table","splines","maps",
+              "broom","mapproj", "Hmisc", "parallel",
+              "rccmisc", "pROC", "ResourceSelection",
+              "knitr")
+for (package in packages) {
+  if (!require(package, character.only=T, quietly=T)) {
+    install.packages(package, repos = "http://cran.us.r-project.org")
+    library(package, character.only=T)
+  }
+}
+
+
+
+simplifynames <- function(priornames=NULL) {
+  
+  # convert to lower case
+  priornames <- tolower(priornames)
+  
+  # remove spaces
+  priornames <- gsub(pattern=" ", replacement="", x=priornames, fixed=TRUE)
+  
+  # remove district and parish
+  priornames <- gsub(pattern="county", replacement="", x=priornames, fixed=TRUE)
+  priornames <- gsub(pattern="parish", replacement="", x=priornames, fixed=TRUE)
+  
+  # return names
+  return(priornames)
+  
+}
+
+
 # load("fullcasemat.RData")
 # 
 # myformula <- "cenanycases ~ 0 + district + MIRsummarystat + te(lag, doymat, by=anom_var1, bs='tp') + te(lag, doymat, by=anom_var2, bs='tp') + s(doy, bs='tp')"
@@ -145,3 +179,99 @@ for (thisobsdate in obsdates) {
   counter <- counter + 1
   
 }
+
+load("outputdf.RData")
+
+head(outputdf)
+outputdf <- outputdf[outputdf$cendate == max(outputdf$cendate, na.rm=TRUE),]
+outputdf$weeknum <- as.numeric(format(outputdf$weekstartdate, "%U"))
+outputdf$year    <- as.numeric(format(outputdf$weekstartdate, "%Y"))
+outputdf$pred[(outputdf$weeknum <= minweek)|(outputdf$weeknum >= maxweek)] <- 0
+
+outputdf <- group_by(outputdf, district, year)
+mysums <- dplyr::summarise(outputdf,
+                           obs=sum(anycases, na.rm=TRUE),
+                           est=sum(pred, na.rm=TRUE))
+
+mysums <- group_by(mysums, district)
+myr2   <- dplyr::summarise(mysums,
+                           r2 = cor(obs, est, method="spearman"))
+myr2
+
+
+
+
+districtshapefile <- ".\\shapefile\\cb_2014_us_county_5m - in EPSG 5070 - only SD.shp"
+
+# load the shapefile immediately so that we can get rid of any districts which are not found here
+district_shapes <- readShapePoly(districtshapefile)
+# simplify name
+district_shapes$district <- simplifynames(district_shapes$NAME)
+diagnostic_shapefiledistricts <- unique(district_shapes$district)
+
+
+outputdf <- group_by(outputdf, district)
+totsums <- dplyr::summarise(outputdf,
+                            obs = sum(anycases, na.rm=TRUE),
+                            est = sum(pred, na.rm=TRUE))
+
+
+
+
+
+
+crs(district_shapes) <- "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80     +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
+projected_districts <- spTransform(district_shapes, crs("+proj=longlat +datum=WGS84 +no_defs"))
+projected_districts@data$id = rownames(projected_districts@data)
+projected_districts.df <- tidy(projected_districts)
+projected_districts.df <- left_join(projected_districts.df, projected_districts@data, by="id")
+head(projected_districts.df)
+
+projected_districts.df <- left_join(projected_districts.df, myr2, by="district")
+projected_districts.df <- left_join(projected_districts.df, totsums, by="district")
+
+thisplot <- ggplot(projected_districts.df) +
+  aes(long,lat,fill=r2,group=group,id=id,guides=FALSE) +
+  geom_polygon() + xlab("") + ylab("") +
+  geom_path(color="black") +
+  theme(legend.position="bottom") +
+  coord_map() + ggtitle("R2 for predictions vs. observations by year") +
+  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
+        axis.ticks = element_blank(), axis.text.x = element_blank(),
+        axis.text.y = element_blank(), axis.title.x=element_blank(),
+        axis.title.y = element_blank(),
+        legend.position="right",
+        legend.key.width=unit(1, "cm"),
+        legend.key.height=unit(0.5,"cm")) +
+  scale_fill_gradient(low="white", high="blue", name="R2, cases\nper year") +
+  theme(legend.position = "bottom")
+
+thisplot2 <- ggplot(projected_districts.df) +
+  aes(long,lat,fill=log(obs+1),group=group,id=id,guides=FALSE) +
+  geom_polygon() + xlab("") + ylab("") +
+  geom_path(color="black") +
+  theme(legend.position="bottom") +
+  coord_map() + ggtitle("Cases by county") +
+  theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
+        axis.ticks = element_blank(), axis.text.x = element_blank(),
+        axis.text.y = element_blank(), axis.title.x=element_blank(),
+        axis.title.y = element_blank(),
+        legend.position="right",
+        legend.key.width=unit(1, "cm"),
+        legend.key.height=unit(0.5,"cm")) +
+  scale_fill_gradient(low="white", high="blue", name="log(total cases)") +
+  theme(legend.position = "bottom")
+
+ggsave(thisplot, filename="thisplot.png",
+       height=8, width=8)
+ggsave(thisplot2, filename="thisplot2.png",
+       height=8, width=8)
+
+projected_districts.df$r2[projected_districts.df$district == "mellette"] <- NA
+
+thisplot3 <- ggplot(projected_districts.df) + geom_point(aes(x=log(obs+1), y=r2)) +
+  ggtitle("Relationship between predictability\nand total case load per county") +
+  theme(text=element_text(size=20)) + xlab("log(cases)") + ylab("R2")
+ggsave(thisplot3, filename="thisplot3.png",
+       height=8, width=8)
+
