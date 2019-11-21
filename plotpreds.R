@@ -89,7 +89,7 @@ head(outputdf)
 outputdf$weekdiff <- as.numeric((outputdf$weekstartdate - outputdf$cendate)/7)
 preobsdates <- unique(outputdf$weekstartdate)
 preobsdates <- preobsdates[preobsdates <= min(outputdf$cendate, na.rm=TRUE)]
-preobsdates <- preobsdates[preobsdates >= as.Date("2012-01-01", "%Y-%m-%d")]
+#preobsdates <- preobsdates[preobsdates >= as.Date("2012-01-01", "%Y-%m-%d")]
 obsdates <- unique(outputdf$cendate, na.rm=TRUE)
 weeksahead <- 4
 slowdown <- 4
@@ -119,6 +119,7 @@ for (thispredate in preobsdates) {
   thisplot1 <- ggplot() + geom_line(data=tempdf1, aes(x=weekstartdate, y=obs), color="black") +
     geom_line(data=tempdf1, aes(x=weekstartdate, y=cenest), color="red") +
     ggtitle(paste("Model fitting for ", as.Date(thispredate, origin="1970-01-01"), sep="")) +
+    geom_vline(xintercept = as.Date("2016-01-01"), linetype=2) +
     scale_alpha_continuous(guide=FALSE) + 
     xlab("") + ylab("WNV-positive counties") + scale_x_date(date_breaks="1 year", date_labels="%Y")
 
@@ -161,6 +162,7 @@ for (thisobsdate in obsdates) {
   thisplot1 <- ggplot() + geom_line(data=tempdf1, aes(x=weekstartdate, y=obs), color="black") +
     geom_line(data=tempdf1, aes(x=weekstartdate, y=cenest), color="red") +
     ggtitle(paste("Four-week-ahead predictions for ", as.Date(thisobsdate, origin="1970-01-01"), sep="")) +
+    geom_vline(xintercept = as.Date("2016-01-01"), linetype=2) +
     scale_alpha_continuous(guide=FALSE) + 
     xlab("") + ylab("WNV-positive counties") + scale_x_date(date_breaks="1 year", date_labels="%Y")
 
@@ -172,30 +174,30 @@ for (thisobsdate in obsdates) {
   
   tempdf2 <- outputdf[outputdf$year == as.numeric(format(thisobsdate, "%Y")),]
   tempdf2 <- tempdf2[tempdf2$weekstartdate <= (thisobsdate + 7*weeksahead),]
+  #tempdf2 <- tempdf2[tempdf2$cendate >= (thisobsdate - 7*weeksahead),]
   
-  alphalist <- data.frame(myalpha=seq(from=1, to=0.05, length.out=length(unique(tempdf2$cendate))),
-                          cendate=unique(tempdf2$cendate))
-  alphalist$myalpha <- alphalist$myalpha^2
-  tempdf2 <- left_join(tempdf2, alphalist, by="cendate")
-  tempdf2$cendate <- rank(tempdf2$cendate)
+  # alphalist <- data.frame(myalpha=seq(from=1, to=0.05, length.out=length(unique(tempdf2$cendate))),
+  #                         cendate=unique(tempdf2$cendate))
+  # alphalist$myalpha <- alphalist$myalpha^4
+  # tempdf2 <- left_join(tempdf2, alphalist, by="cendate")
+  # tempdf2$cendate <- rank(tempdf2$cendate)
   
-  thisplot2 <- ggplot() + geom_line(data=tempdf1, aes(x=weekstartdate, y=obs), color="black") +
-    geom_line(data=tempdf2, aes(x=weekstartdate, y=est, group=cendate, alpha=cendate), color="red") +
-    scale_alpha_continuous(guide=FALSE) + 
+  tempdf3 <- tempdf2[tempdf2$cendate == max(tempdf2$cendate, na.rm=TRUE),]
+  
+  thisplot2 <- ggplot() + geom_line(data=tempdf2, aes(x=weekstartdate, y=est, group=cendate), color="grey") +
+    geom_line(data=tempdf1, aes(x=weekstartdate, y=obs), color="black") +
+    geom_line(data=tempdf3, aes(x=weekstartdate, y=obs), color="red") + 
+    scale_color_manual(values=c("grey", "red"), guide=FALSE) +
     xlab("") + ylab("WNV-positive counties") + scale_x_date(date_breaks="1 month", date_labels="%b")
   
   thisplot3 <- arrangeGrob(thisplot1, thisplot2, ncol=1)
   
-  for (i in 1:slowdown) {
-  
-    ggsave(thisplot3, filename=paste(".\\predictions\\",
+  ggsave(thisplot3, filename=paste(".\\predictions\\",
                                     str_pad(counter, 4, pad="0"),
                                     ".png", sep=""),
            height=8,
            width=12)
-    
-    counter <- counter + 1
-    
-  }
   
+  counter <- counter + 1
+    
 }
