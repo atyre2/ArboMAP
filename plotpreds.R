@@ -83,13 +83,13 @@ outputdf <- dplyr::summarise(outputdf,
                              obs=sum(anycases, na.rm=TRUE),
                              est=sum(pred, na.rm=TRUE))
 
-head(outputdf)
+outputdf <- outputdf[outputdf$weekstartdate <= as.Date("2019-01-01"),]
 
 # get ready for graphing by setting up parameters
 outputdf$weekdiff <- as.numeric((outputdf$weekstartdate - outputdf$cendate)/7)
 preobsdates <- unique(outputdf$weekstartdate)
 preobsdates <- preobsdates[preobsdates <= min(outputdf$cendate, na.rm=TRUE)]
-#preobsdates <- preobsdates[preobsdates >= as.Date("2012-01-01", "%Y-%m-%d")]
+preobsdates <- preobsdates[preobsdates >= as.Date("2014-01-01", "%Y-%m-%d")]
 obsdates <- unique(outputdf$cendate, na.rm=TRUE)
 weeksahead <- 4
 slowdown <- 4
@@ -186,7 +186,7 @@ for (thisobsdate in obsdates) {
   
   thisplot2 <- ggplot() + geom_line(data=tempdf2, aes(x=weekstartdate, y=est, group=cendate), color="grey") +
     geom_line(data=tempdf1, aes(x=weekstartdate, y=obs), color="black") +
-    geom_line(data=tempdf3, aes(x=weekstartdate, y=obs), color="red") + 
+    geom_line(data=tempdf3, aes(x=weekstartdate, y=est), color="red") + 
     scale_color_manual(values=c("grey", "red"), guide=FALSE) +
     xlab("") + ylab("WNV-positive counties") + scale_x_date(date_breaks="1 month", date_labels="%b")
   
@@ -200,4 +200,77 @@ for (thisobsdate in obsdates) {
   
   counter <- counter + 1
     
+}
+
+
+
+
+
+
+
+
+load("outputdf.RData")
+outputdf <- group_by(outputdf, district, weekstartdate)
+outputdf <- dplyr::summarise(outputdf,
+                             obs=mean(anycases, na.rm=TRUE),
+                             est=mean(pred, na.rm=TRUE))
+
+minweek <- 23
+maxweek <- 40
+outputdf$year <- as.numeric(format(outputdf$weekstartdate, "%Y"))
+outputdf$weeknum <- as.numeric(format(outputdf$weeknum, "%U"))
+outputdf$est[outputdf$weeknum > maxweek] <- 0
+outputdf$est[outputdf$weeknum < minweek] <- 0
+outputdf <- group_by(outputdf, year, district)
+tempdf <- dplyr::summarise(outputdf,
+                           obs=sum(obs, na.rm=TRUE),
+                           est=sum(est, na.rm=TRUE))
+
+districtshapefile <- ".\\shapefile\\cb_2014_us_county_5m - in EPSG 5070 - only SD.shp"
+district_shapes <- readShapePoly(districtshapefile)
+# simplify name
+district_shapes$district <- simplifynames(district_shapes$NAME)
+
+crs(district_shapes) <- "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80     +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
+projected_districts <- spTransform(district_shapes, crs("+proj=longlat +datum=WGS84 +no_defs"))
+projected_districts@data$id = rownames(projected_districts@data)
+projected_districts.df <- tidy(projected_districts)
+projected_districts.df <- left_join(projected_districts.df, projected_districts@data, by="id")
+
+for (curyear in unique(outputdf$year)) {
+  
+  tempdf2 <- tempdf[tempdf$year == curyear,]
+  tempdf3 <- tempdf2
+  tempdf3$fill <- tempdf3$obs
+  tempdf3$type <- "observed"
+  
+  tempdf4 <- tempdf2
+  tempdf4$fill <- tempdf4$est
+  tempdf4$type <- "estimated"
+  
+  projected_districts.df1 <- left_join(projected_districts.df, tempdf3, by="district")
+  projected_districts.df2 <- left_join(projected_districts.df, tempdf4, by="district")
+  
+  projected_districts3 <- bind_rows(projected_districts.df1, projected_districts.df2)
+  
+  thisplot1 <- ggplot(projected_districts3) +
+    aes(long,lat,fill=fill,group=group,id=id,guides=FALSE) +
+    geom_polygon() + xlab("") + ylab("") +
+    geom_path(color="black") +
+    theme(legend.position="bottom") +
+    coord_map() + ggtitle(paste("Positive county-weeks in", curyear, sep=" ")) +
+    theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank(),
+          axis.ticks = element_blank(), axis.text.x = element_blank(),
+          axis.text.y = element_blank(), axis.title.x=element_blank(),
+          axis.title.y = element_blank(),
+          legend.position="right",
+          legend.key.width=unit(1, "cm"),
+          legend.key.height=unit(0.5,"cm")) +
+    facet_grid(~type) +
+    scale_fill_gradient(low="lightyellow", high="darkred", name="positives") +
+    theme(text=element_text(size=20))
+  
+  ggsave(thisplot1, width=8, height=5, filename=paste(curyear, ".png", sep=""))
+  
+  
 }
