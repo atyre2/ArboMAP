@@ -74,7 +74,7 @@ modelformulas <- c("cub-fx-nonanom"= "anycases ~ 0 + district + MIRsummarystat +
 modelnames <- names(modelformulas)
 
 ## or choose just two
-#modelnames <- c("cub-sv-nonanom", "tp-sv-anom")
+modelnames <- c("tp-sv-anom")
 
 # adjust smoothness
 modelgamma <- 1.0
@@ -88,22 +88,22 @@ modeloutputdir <- ".\\model output\\"
 # where are the human data located?
 # example of a file with directories an drive:
 humandatafile <- ".\\human case data\\simulated human case data.csv"
-#humandatafile <- "C:\\home\\work\\davis\\ArboMAP for Mike on 19-08-13\\human\\19-01-29 - reconciled human WNV.csv"
+humandatafile <- "C:\\home\\work\\davis\\ArboMAP for Mike on 19-08-13\\human\\19-01-29 - reconciled human WNV.csv"
 
 # what is the date of the last human case we're willing to believe?
 # probably, cut this off at the end of last year
 # DO NOT use any human cases from the year you're modeling
-maxobservedhumandate <- as.Date("2017-12-31", "%Y-%m-%d")
+maxobservedhumandate <- as.Date("2018-12-31", "%Y-%m-%d")
 
 # cull some proportion of the outlying human cases
 humancasealpha <- 0.02
 
 # which week are we producing the graphs for?
-weekinquestion <- as.Date("2018-07-15", "%Y-%m-%d")
+weekinquestion <- as.Date("2019-07-15", "%Y-%m-%d")
 
 # where are the weather csv files stored?
 weatherpathstr <- ".\\weather data\\"
-#weatherpathstr <- "C:\\home\\work\\davis\\ArboMAP for Mike on 19-08-13\\weather\\"
+weatherpathstr <- "C:\\home\\work\\davis\\ArboMAP for Mike on 19-08-13\\weather\\"
 
 # what is the name of the summary file to be created?
 weathersummaryfile <- "weather data summary file.csv"
@@ -111,11 +111,11 @@ weathersummaryfile <- "weather data summary file.csv"
 # which variables do you want to use?
 # vpd, rmean, pr
 var1name <- "tmeanc"
-var2name <- "rmean"
+var2name <- "vpd"
 
 # where are the mosquito test files located?
 mosqfile <- ".\\mosquito data\\simulated mosquito tests.csv"
-#mosqfile <- "C:\\home\\work\\davis\\ArboMAP for Mike on 19-08-13\\mosquito\\19-01-29 - state testing.csv"
+mosqfile <- "C:\\home\\work\\davis\\ArboMAP for Mike on 19-08-13\\mosquito\\19-01-29 - state testing.csv"
 
 # which district stratification scheme are we using?
 stratafile <- ".\\strata\\17-04-20 - classified strata - classic.csv"
@@ -884,6 +884,9 @@ for (curmodel in modelnames) {
                    subset=modeled==1,
                    cluster=cl)
   stopCluster(cl)
+  
+  #save(firstreg, file="firstreg.RData")
+  #save(fullcasemat, file="fullcasemat.RData")
   
   # add model plots to the list
   modelplots[[curmodel]] <- plot(firstreg, select=1)
