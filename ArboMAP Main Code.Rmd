@@ -115,6 +115,9 @@ var2name <- "vpd"
 # where are the mosquito test files located?
 mosqfile <- ".\\mosquito data\\19-08-29 - reconciled mosquito data.csv"
 
+# where is the districtshapefile
+districtshapefile <- ".\\shapefile\\cb_2014_us_county_5m - in EPSG 5070 - only SD.shp"
+
 # to which two other years do we want to compare the current year's predictions?
 compyear1 <- 2012
 compyear2 <- 2017
