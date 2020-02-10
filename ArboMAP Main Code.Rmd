@@ -57,7 +57,8 @@ packages <- c("reshape2", "ggplot2", "gridExtra",
               "lme4","pracma","dplyr","maptools",
               "raster","spdep","mgcv","sp","rgdal",
               "GISTools","data.table","splines","maps",
-              "broom","mapproj", "Hmisc", "pROC", "parallel")
+              "broom","mapproj", "Hmisc", "pROC", "parallel",
+              "tigris")
 for (package in packages) {
     if (!require(package, character.only=T, quietly=T)) {
         install.packages(package, repos = "http://cran.us.r-project.org")
@@ -150,11 +151,10 @@ dlagdeg  <- 8
 
 ```{r weatherdataload, include=FALSE, echo=TRUE}
 # load the shapefile immediately so that we can get rid of any districts which are not found here
-district_shapes <- readShapePoly(districtshapefile)
 # simplify name
+district_shapes <- counties("Louisiana", cb=TRUE)
 district_shapes$district <- simplifynames(district_shapes$NAME)
 diagnostic_shapefiledistricts <- unique(district_shapes$district)
-
 weathernames <- c("district", "doy", "year", var1name, var2name)
 
 # load and concat files
@@ -162,14 +162,10 @@ weatherlist <- list.files(path=weatherpathstr, pattern="(.csv)", recursive=FALSE
 weather <- data.frame()
 for (i in 1:length(weatherlist)) {
   
-  if (weatherlist[[i]] != weathersummaryfile) {
-  
-    tempdf <- read.csv(paste(weatherpathstr, weatherlist[[i]], sep="")) 
-    # get rid of the variables we aren't using
-    tempdf <- tempdf[,weathernames]
-    weather <- bind_rows(weather, tempdf)  
-    
-  }
+  tempdf <- read.csv(paste(weatherpathstr, weatherlist[[i]], sep="")) 
+  # get rid of the variables we aren't using
+  tempdf <- tempdf[,weathernames]
+  weather <- bind_rows(weather, tempdf)  
   
 }
 weather$date <- as.Date(paste(weather$year,
@@ -290,17 +286,6 @@ weather <- weather[weather$district %in% unique(district_shapes$district),]
 dailyextr <- weather
 rm(weather)
 gc()
-
-if (ostype == "windows") { 
-  
-  ggsave(paste(graphicoutputdir,
-               "var1.png",
-               sep=""), plot1)
-  ggsave(paste(graphicoutputdir,
-               "var2.png",
-               sep=""), plot2)
-  
-}
 ```
 
 ## Vector infection data
@@ -310,7 +295,6 @@ if (ostype == "windows") {
 wnv <- read.csv(mosqfile, stringsAsFactors=FALSE)
 wnv$col_date <- as.Date(wnv$col_date, "%m/%d/%Y")
 wnv$year <- as.numeric(format(wnv$col_date, "%Y"))
-
 ```
 
 
