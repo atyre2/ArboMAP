@@ -13,3 +13,6 @@ outputdf backup
 outputdf.RData
 outputdf.csv
 predictions
+weather data
+human case data
+mosquito data
