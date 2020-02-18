@@ -86,8 +86,8 @@ modelformulas <- c("cub-fx-nonanom"= "anycases ~ 0 + district + cenppr + cenyear
 ## run all listed models
 #modelnames <- names(modelformulas)
 
-# or choose just some selection
-modelnames <- c("tp-fx-nonanom", "tp-fx-anom", "tp-sv-nonanom", "tp-sv-anom")
+## or choose just some selection
+modelnames <- c("tp-sv-anom")
 
 # where are the human data located?
 # example of a file with directories an drive:
@@ -359,8 +359,6 @@ fullcasemat$observed   <- 1*((fullcasemat$weekstartdate >= minobservedhumandate)
 fullcasemat$weeknum <- as.numeric(format(fullcasemat$weekstartdate, "%U"))
 fullcasemat$modeled <- fullcasemat$observed * (fullcasemat$weeknum >= humanminobsweek) * (fullcasemat$weeknum <= humanmaxobsweek)
 
-
-
 # count cases
 for (i in 1:nrow(fullcasemat)) {
   
@@ -392,6 +390,9 @@ observedbefore <- sum(tempdf$totalcases, na.rm=TRUE)
 observedtotal  <- sum(fullcasemat$totalcases, na.rm=TRUE)
 weekinquestionreformat <- format(weekinquestionSun, "%m-%d")
 observedfraction <- 100*round(observedbefore / observedtotal, 2)
+
+
+
 ```
 
 ## Human data
@@ -422,7 +423,7 @@ The predictive model of human cases was calibrated using `r totcase` historical 
 
 The graphs below show observed statewide risk (black) and estimated risk (red) up to `r maxdesiredhumandatestr` `r maxdesiredhumandate`. Observed risk should be completely zero during the last year - these data are not used in the model, and will only be updated once final human case data are received at the end of the year.
 
-```{r humandata2, echo=TRUE, warnings=FALSE, include=FALSE}
+```{r humandata2, echo=FALSE, warnings=FALSE, include=FALSE}
 # select which variables we're going to use
 dailyextr <- data.frame(dailyextr)
 dailyextr$var1 <- dailyextr[,which(colnames(dailyextr) == var1name)]
@@ -568,6 +569,22 @@ fullcasemat$cenyear <- factor(fullcasemat$cenyear)
 fullcasemat <- ungroup(fullcasemat)
 ```
 
+```{r, echo=FALSE, include=TRUE}
+# plot relationship of cases to MIGR
+tempdf <- group_by(fullcasemat, year)
+tempdf <- dplyr::summarise(tempdf,
+                           totrisk = sum(anycases, na.rm=TRUE),
+                           MIGR    = sum(poolpositiverate))
+tempdf$totrisk[tempdf$year == 2019] <- 20
+thisplot <- ggplot(tempdf) + geom_smooth(aes(x=MIGR, y=totrisk), method=lm) +
+  geom_label(aes(x=MIGR, y=totrisk, label=year)) +
+  ggtitle("MIGR vs. total annual risk") +
+  xlab("estimated MIGR") + ylab("total risk in year") +
+  theme(text=element_text(size=18))
+plot(thisplot)
+```
+
+
 ```{r humanreg, echo=FALSE, include=FALSE}
 # set up list to contain models
 modelplots <- list()
@@ -639,7 +656,7 @@ tempdf <- dplyr::summarize(tempdf,
                     est=mean(pred, na.rm=TRUE),
                     week=mean(weeknum, na.rm=TRUE))
 
-tempdf$newwe <- (tempdf$week - (humanminobsweek-5)) / ((humanmaxobsweek+5) - (humanminobsweek-5) + 1)
+tempdf$newwe <- (tempdf$week - (humanminobsweek-0)) / ((humanmaxobsweek+0) - (humanminobsweek-0) + 1)
 tempdf$year <- as.numeric(format(tempdf$weekstartdate, "%Y"))
 tempdf$newdate <- tempdf$year + tempdf$newwe
 
@@ -718,7 +735,7 @@ thisplot3 <- ggplot() + geom_jitter(data=tempdf, aes(x=obs, y=est)) +
   xlab("observed") + ylab("estimated") +
   theme(panel.grid.minor.x=element_blank()) +
   theme(legend.position="bottom") +
-  geom_abline(slope=1, intercept=0, color="red", linetype=2, alpha=0.2) + 
+  geom_abline(slope=1, intercept=0, color="red", linetype=2) + 
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(),
         legend.key = element_blank())
 plot(thisplot3)
@@ -803,8 +820,6 @@ thisyear$totcases <- round_any(thisyear$totcases, 0.1)
 kable(thisyear[c("model", "totest", "totcases")],
       col.names=c("model", "est. positives", "total est. cases"))
 ```
-
-
 
 ## Results for `r weekinquestionSun` to `r format(weekinquestionSat, "%m-%d")`
 
@@ -961,10 +976,12 @@ thisplotrisk <- ggplot(projected_districts.df) +
 plot(thisplotrisk)
 ```
 
+\newpage
+
 ## Estimated dependence functions
 
 ```{r modelplots, include=TRUE, echo=FALSE, fig.width=7, fig.height=4}
-curmodel <- modelnames[1]
+modelcount <- 0
 for (curmodel in modelnames) {
   
   thisplot <- modelplots[[curmodel]]
@@ -972,12 +989,14 @@ for (curmodel in modelnames) {
   for (curplot in 1:length(thisplot)) {
   
     thissubplot <- thisplot[[curplot]]
-
+    #str(thissubplot)
     # is this a 1d plot?
     if (is.null(thissubplot$main)) {
       
       tempdf <- data.frame(x=thissubplot$x,
-                           y=thissubplot$fit)
+                           y=thissubplot$fit,
+                           se=thissubplot$se)
+      write.csv(tempdf, file = paste("C:\\home\\work\\davis\\ArboMAP\\various graphics\\louisiana_", modelcount, ".csv", sep="")) 
       
       mygg <- ggplot(tempdf) + geom_line(aes(x=x, y=y)) +
         xlab(thissubplot$xlab) + ylab(thissubplot$ylab) +
@@ -993,6 +1012,8 @@ for (curmodel in modelnames) {
       tempdf <- expand.grid(x=thissubplot$x,
                             y=thissubplot$y)
       tempdf$fit <- thissubplot$fit
+      tempdf$se <- thissubplot$se
+      write.csv(tempdf, file = paste("C:\\home\\work\\davis\\ArboMAP\\various graphics\\louisiana_", modelcount, ".csv", sep="")) 
       
       # select a subset of y to plot as lines
       ychosen <- quantile(thissubplot$y, probs=c(0.3, 0.5, 0.7), type=3)
@@ -1008,7 +1029,8 @@ for (curmodel in modelnames) {
     }
    
     plot(mygg)
-     
+    modelcount <- modelcount + 1
+    
   }
   
 }
@@ -1026,6 +1048,8 @@ if (length(humannotinshapefile) == 0) { humannotinshapefile <- "none" }
 
 weathernotinshapefile <- diagnostic_weatherdistricts[!(diagnostic_weatherdistricts %in% diagnostic_shapefiledistricts)]
 if (length(weathernotinshapefile) == 0) { weathernotinshapefile <- "none" }
+
+write.csv(fullcasemat, file="C:\\home\\work\\davis\\LA SD arbomap comparison\\lafullcasemat.csv")
 ```
 
 There are `r length(diagnostic_shapefiledistricts)` districts in the shapefile. This is the maximum number of districts ArboMAP will recognize in the human, mosquito, or weather data.
@@ -1033,4 +1057,3 @@ There are `r length(diagnostic_shapefiledistricts)` districts in the shapefile. 
 There are `r length(diagnostic_humandistricts)` districts in the human WNV data. If some districts never reported cases, this number may be less than the number of districts in the shapefile. If there are more, there are likely misspellings in the human data file. Human districts not found in the district shapefile: `r humannotinshapefile`.
 
 There are `r length(diagnostic_weatherdistricts)` districts in the mosquito WNV data. If these data were downloaded with the GEE app, they should match the shapefile districts exactly. Weather districts not found in the district shapefile: `r weathernotinshapefile`.
-
